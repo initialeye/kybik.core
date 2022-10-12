@@ -1,0 +1,6 @@
+[submodule "deps/kybik"]
+	path = deps/kybik
+	url = https://github.com/initialeye/kybik
+[submodule "deps/zap"]
+	path = deps/zap
+	url = https://github.com/initialeye/zap
