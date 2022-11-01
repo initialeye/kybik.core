@@ -1,3 +1,6 @@
+// COPYRIGHT by initialeye (Gostev Roman)
+// This source code may not be redistributed without written permission
+
 const std = @import("std");
 const builtin = @import("builtin");
 
