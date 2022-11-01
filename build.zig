@@ -8,7 +8,7 @@ const pkgs = struct {
     };
     const kybik = std.build.Pkg{
         .name = "framework.zig",
-        .path = std.build.FileSource.relative("./deps/kybik-core/framework.zig"),
+        .path = std.build.FileSource.relative("./deps/kybik/framework.zig"),
     };
 };
 pub fn build(b: *std.build.Builder) void {

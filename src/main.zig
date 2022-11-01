@@ -72,19 +72,27 @@ const ModuleImpl = struct {
     fn if_name(this: *const ModuleImpl) []const u8 {
         return this.interface.get_name().from();
     }
-    fn iterate_files(this: *ModuleImpl, path: []const u8, pattern: []const u8, cb: Fw.FileIterateCallback) void {
-        const paths = [_][]const u8 { this.respath, path };
+    fn iterate_files(this: *ModuleImpl, path: []const u8, pattern: []const u8, cb: Fw.FileIterateCallback,
+        ctx: Fw.CbCtx) u64
+    {
+        const paths = [_][]const u8 { coreImpl.core.respath, path };
         const fullpath = std.fs.path.resolve(this.allocator(), paths[0..]) catch unreachable;
         defer this.allocator().free(fullpath);
         var dir = std.fs.cwd().openDir(fullpath, .{ .iterate = true }) catch unreachable;
         var it = dir.iterate();
         _ = pattern; //TODO
+        var result: u64 = 0;
         while (it.next() catch unreachable) |file| {
-            const internalPaths = [_][]const u8 { this.respath, path, file.name };
+            const partialPaths = [_][]const u8 { path, file.name };
+            const partialFullpath = std.fs.path.join(this.allocator(), partialPaths[0..]) catch unreachable;
+            defer this.allocator().free(partialFullpath);
+            const internalPaths = [_][]const u8 { coreImpl.core.respath, partialFullpath };
             const internalFullpath = std.fs.path.resolve(this.allocator(), internalPaths[0..]) catch unreachable;
             defer this.allocator().free(internalFullpath);
-            cb(Fw.String.init(file.name), Fw.String.init(internalFullpath));
+            cb(Fw.String.init(partialFullpath), Fw.String.init(internalFullpath), ctx);
+            result += 1;
         }
+        return result;
     }
     fn register(this: *ModuleImpl, core: *CoreImpl, signame: []const u8) *const Signal {
         var sig = this.signals.getOrPut(this.gpa.allocator(), signame) catch unreachable;
@@ -261,12 +269,15 @@ const CoreImpl = struct{
         };
         const paths = [_][]const u8 {std.mem.span(std.os.argv[0]), ".."};
         impl.root = std.fs.path.resolve(impl.core.allocator(), paths[0..]) catch unreachable;
+        const respathParts = [_][] const u8 { impl.root, "resources", };
+        impl.core.respath = std.fs.path.resolve(impl.core.allocator(), respathParts[0..]) catch unreachable;
         return impl;
     }
 
     fn deinit(this: *CoreImpl) void {
         const al = this.core.allocator();
         al.free(this.root);
+        al.free(this.core.respath);
         this.mtx.lock();
         defer this.mtx.unlock();
         this.tp.shutdown();
@@ -537,8 +548,10 @@ const Export = struct {
     fn schedule_task(module: Fw.Module, callback: Fw.SchedCallback, timestamp: u64, ctx: Fw.CbCtx) callconv(.C) void {
         coreImpl.schedule(@ptrCast(*ModuleImpl, module), callback, timestamp, ctx);
     }
-    fn iterate_files(module: Fw.Module, path: Fw.String, pat: Fw.String, cb: Fw.FileIterateCallback) callconv(.C) void {
-        ModuleImpl.convert(module).iterate_files(path.from(), pat.from(), cb);
+    fn iterate_files(module: Fw.Module, path: Fw.String, pattern: Fw.String, cb: Fw.FileIterateCallback, ctx: Fw.CbCtx)
+        callconv(.C) u64
+    {
+        return ModuleImpl.convert(module).iterate_files(path.from(), pattern.from(), cb, ctx);
     }
     fn nanotime() callconv(.C) u64 {
         return coreImpl.nanotime();
